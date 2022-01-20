@@ -7,6 +7,7 @@ require_once __DIR__.'/../vendor/autoload.php';
 ))->bootstrap();
 
 date_default_timezone_set('Asia/Dhaka');
+set_time_limit(300);
 
 /*
 |--------------------------------------------------------------------------

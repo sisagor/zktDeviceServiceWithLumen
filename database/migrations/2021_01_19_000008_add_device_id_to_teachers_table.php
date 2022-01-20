@@ -15,7 +15,7 @@ class AddDeviceIdToTeachersTable extends Migration
     {
         if (! Schema::hasColumn('teachers', 'device_id')) {
             Schema::table('teachers', function (Blueprint $table) {
-                $table->integer('device_id')->nullable();
+                $table->string('device_id')->nullable();
             });
         }
     }

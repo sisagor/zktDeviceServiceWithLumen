@@ -103,6 +103,7 @@ class ZKTService
     #Clear Users
     public function clearUsers()
     {
+        $this->zkt->enableDevice();
         return $this->zkt->clearUsers();
     }
 

@@ -40,28 +40,36 @@ class StudentAttendanceController extends Controller
 
     public function create(): object
     {
+
         if ($this->service->connect())
         {
-            $oldStudent = count($this->service->getUser());
 
             $students = DB::table($this->students)->select('id', 'name', 'phone')->whereNull('device_id')->where('status', 1)->get();
+
+           // dd($students);
 
             foreach ($students as $student){
 
                 //Making device ID;
-                $deviceId = sprintf("%'.0".env('DEVICE_ID_LENGTH', '5')."d", $student->id);
+                $deviceId = ($student->id + 100);
+                $pass = substr($student->phone, -5);
 
-                $this->service->setUser($deviceId, $deviceId, $student->name, $student->phone, 0, 0);
+                $oldStudent = count($this->service->getUser());
+                //$this->service->disableDevice();
+                $this->service->setUser($deviceId, $deviceId, $student->name, $pass, 0, 0);
 
                 $newStudent = count($this->service->getUser());
 
                 if ($oldStudent < $newStudent){
                     DB::table($this->students)->where('id', $student->id)->update(['device_id' => $deviceId, 'modified_at' => Carbon::now()]);
                 }
-                //dd($this->service->getUser());
+
+                //dd($this->service->clearUsers());
                 //dd($this->service->getAttendance());
-                //dd($this->service->removeUser($deviceId));
+
             }
+            //var_dump($this->service->clearUsers());
+            //dd($this->service->clearAttendance());
         }
         else
         {
@@ -127,18 +135,25 @@ class StudentAttendanceController extends Controller
                     ->select('enrollments.*')
                     ->first();
 
+                if (! $student){
+                    continue;
+                }
+
 
                 $exist = DB::table($this->studentAttendances)
-                    ->where('student_id', $log->student_id)
+                    ->where('school_id', $student->school_id)
+                    ->where('student_id', $student->student_id)
                     ->where('month', Carbon::parse($log->punch_time)->format('m'))
                     ->where('year', Carbon::parse($log->punch_time)->format('Y'))
                     ->count();
+
 
                 if ($exist)
                 {
 
                     DB::table($this->studentAttendances)
-                        ->where('student_id', $log->student_id)
+                        ->where('student_id', $student->student_id)
+                        ->where('school_id', $student->school_id)
                         ->where('month', Carbon::parse($log->punch_time)->format('m'))
                         ->where('year', Carbon::parse($log->punch_time)->format('Y'))
                         ->update([
@@ -148,12 +163,8 @@ class StudentAttendanceController extends Controller
                 }
                 else
                 {
-                    DB::table($this->studentAttendances)
-                        ->where('student_id', $log->student_id)
-                        ->where('month', Carbon::parse($log->punch_time)->format('m'))
-                        ->where('year', Carbon::parse($log->punch_time)->format('Y'))
-                        ->update([
-                            'school_id ' => $student->school_id,
+                    DB::table($this->studentAttendances)->insert([
+                            'school_id' => $student->school_id,
                             'student_id' => $student->student_id,
                             'class_id' => $student->class_id,
                             'section_id' => $student->section_id,
@@ -161,9 +172,12 @@ class StudentAttendanceController extends Controller
                             'month' => Carbon::parse($log->punch_time)->format('m'),
                             'year' => Carbon::parse($log->punch_time)->format('Y'),
                             'day_' . Carbon::parse($log->punch_time)->format('d') => "P",
+                            'status' => 1,
                             'created_at' => $log->punch_time,
                         ]);
                 }
+
+                AttendanceLog::where('id', $log->id)->update(['status' => 1]);
 
             }
 

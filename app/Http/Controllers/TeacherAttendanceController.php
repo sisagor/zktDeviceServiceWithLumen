@@ -43,26 +43,31 @@ class TeacherAttendanceController extends Controller
     {
         if ($this->service->connect())
         {
-            $old = count($this->service->getUser());
 
-            $teachers = DB::table($this->table)->select('id', 'name', 'phone')->whereNull('device_id')->where('status', 1)->get();
+            $teachers = DB::table($this->teachers)->select('id', 'name', 'phone')->whereNull('device_id')->where('status', 1)->get();
 
-            foreach ($teachers as $teaccher){
+            foreach ($teachers as $teacher){
 
                 //Making device ID;
-                $deviceId = sprintf("%'.0".env('DEVICE_ID_LENGTH', '5')."d", $teaccher->id);
+                $deviceId = ($teacher->id + 100);
 
-                $this->service->setUser($deviceId, $deviceId, $teaccher->name, $teaccher->phone, 0, 0);
+                $pass = substr($teacher->phone, -5);
+
+                $old = count($this->service->getUser());
+
+                $this->service->setUser($deviceId, $deviceId, $teacher->name, $pass, 0, 0);
 
                 $new = count($this->service->getUser());
 
                 if ($old < $new){
-                    DB::table($this->table)->where('id', $teaccher->id)->update(['device_id' => $deviceId, 'modified_at' => Carbon::now()]);
+                    DB::table($this->teachers)->where('id', $teacher->id)->update(['device_id' => $deviceId, 'modified_at' => Carbon::now()]);
                 }
                 //dd($this->service->getUser());
                 //dd($this->service->getAttendance());
                 //dd($this->service->removeUser($deviceId));
             }
+
+            //dd($this->service->getUser());
         }
         else
         {
@@ -80,7 +85,7 @@ class TeacherAttendanceController extends Controller
         {
             $attendances = $this->service->getAttendance();
 
-            //dd($attendances);
+            ///dd($attendances);
 
             foreach ($attendances as $att){
 
@@ -125,13 +130,18 @@ class TeacherAttendanceController extends Controller
                 //Get teacher information
                 $teacher = DB::table($this->teachers)
                     ->join($this->schools, $this->schools . '.id', $this->teachers . '.school_id')
-                    ->select($this->schools . '.academic_year_id', $this->teachers . '.device_id', $this->teachers . '.id')
+                    ->select($this->schools . '.academic_year_id', $this->teachers . '.device_id', $this->teachers . '.id', $this->teachers . '.school_id')
                     ->where($this->teachers . '.device_id', $log->teacher_id)
                     ->first();
 
+                if (! $teacher){
+                    continue;
+                }
+
                 //Check if exist this month
                 $exist = DB::table($this->teacherAttendances)
-                    ->where('teacher_id', $log->teacher_id)
+                    ->where('school_id', $teacher->school_id)
+                    ->where('teacher_id', $teacher->id)
                     ->where('month', Carbon::parse($log->punch_time)->format('m'))
                     ->where('year', Carbon::parse($log->punch_time)->format('Y'))
                     ->count();
@@ -140,8 +150,8 @@ class TeacherAttendanceController extends Controller
                 if ($exist) {
 
                     //update attendance
-                    DB::table($this->studentAttendances)
-                        ->where('teacher_id', $log->student_id)
+                    DB::table($this->teacherAttendances)
+                        ->where('teacher_id', $teacher->id)
                         ->where('month', Carbon::parse($log->punch_time)->format('m'))
                         ->where('year', Carbon::parse($log->punch_time)->format('Y'))
                         ->update([
@@ -152,20 +162,23 @@ class TeacherAttendanceController extends Controller
                 else
                 {
                     //create attendance
-                    DB::table($this->studentAttendances)
-                        ->where('teacher_id', $log->student_id)
+                    DB::table($this->teacherAttendances)
+                        ->where('teacher_id', $teacher->id)
                         ->where('month', Carbon::parse($log->punch_time)->format('m'))
                         ->where('year', Carbon::parse($log->punch_time)->format('Y'))
                         ->update([
-                            'school_id ' => $teacher->school_id,
-                            'teacher_id' => $teacher->teacher_id,
+                            'school_id' => $teacher->school_id,
+                            'teacher_id' => $teacher->id,
                             'academic_year_id' => $teacher->academic_year_id,
                             'month' => Carbon::parse($log->punch_time)->format('m'),
                             'year' => Carbon::parse($log->punch_time)->format('Y'),
                             'day_' . Carbon::parse($log->punch_time)->format('d') => "P",
+                            'status' => 1,
                             'created_at' => $log->punch_time,
                         ]);
                 }
+
+                AttendanceLog::where('id', $log->id)->update(['status' => 1]);
             }
             DB::commit();
         }

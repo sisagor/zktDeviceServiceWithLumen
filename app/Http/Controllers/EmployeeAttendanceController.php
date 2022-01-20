@@ -41,18 +41,22 @@ class EmployeeAttendanceController extends Controller
 
     public function create(): object
     {
+
         if ($this->service->connect())
         {
-            $old = count($this->service->getUser());
 
             $employees = DB::table($this->employee)->select('id', 'name', 'phone')->whereNull('device_id')->where('status', 1)->get();
 
             foreach ($employees as $employee){
 
                 //Making device ID;
-                $deviceId = sprintf("%'.0".env('DEVICE_ID_LENGTH', '5')."d", $employee->id);
+                $deviceId = ($employee->id + 100);
 
-                $this->service->setUser($deviceId, $deviceId, $employee->name, $employee->phone, 0, 0);
+                $pass = substr($employee->phone, -5);
+
+                $old = count($this->service->getUser());
+
+                $this->service->setUser($deviceId, $deviceId, $employee->name, $pass, 0, 0);
 
                 $new = count($this->service->getUser());
 
@@ -63,6 +67,9 @@ class EmployeeAttendanceController extends Controller
                 //dd($this->service->getAttendance());
                 //dd($this->service->removeUser($deviceId));
             }
+
+           //var_dump($this->service->clearUsers());
+            //dd($this->service->getUser());
         }
         else
         {
@@ -127,14 +134,18 @@ class EmployeeAttendanceController extends Controller
                 //Get employee information
                 $employee = DB::table($this->employee)
                     ->join($this->schools, $this->schools . '.id', $this->employee . '.school_id')
-                    ->select($this->schools . '.academic_year_id', $this->employee . '.device_id', $this->employee . '.id')
+                    ->select($this->schools . '.academic_year_id', $this->employee . '.device_id',
+                        $this->employee . '.id', $this->employee . '.school_id')
                     ->where($this->employee . '.device_id', $log->employee_id)
                     ->first();
 
+                if (! $employee){
+                    continue;
+                }
 
                 //Check if exist this month
                 $exist = DB::table($this->employeeAttendance)
-                    ->where('employee_id', $log->employee_id)
+                    ->where('employee_id', $employee->id)
                     ->where('month', Carbon::parse($log->punch_time)->format('m'))
                     ->where('year', Carbon::parse($log->punch_time)->format('Y'))
                     ->count();
@@ -145,7 +156,7 @@ class EmployeeAttendanceController extends Controller
 
                     //update attendance
                     DB::table($this->employeeAttendance)
-                        ->where('employee_id', $log->employee_id)
+                        ->where('employee_id', $employee->id)
                         ->where('month', Carbon::parse($log->punch_time)->format('m'))
                         ->where('year', Carbon::parse($log->punch_time)->format('Y'))
                         ->update([
@@ -157,12 +168,12 @@ class EmployeeAttendanceController extends Controller
                 {
                     //create attendance
                     DB::table($this->employeeAttendance)
-                        ->where('employee_id', $log->employee_id)
+                        ->where('employee_id', $employee->id)
                         ->where('month', Carbon::parse($log->punch_time)->format('m'))
                         ->where('year', Carbon::parse($log->punch_time)->format('Y'))
                         ->update([
                             'school_id ' => $employee->school_id,
-                            'employee_id' => $employee->employee_id,
+                            'employee_id' => $employee->id,
                             'academic_year_id' => $employee->academic_year_id,
                             'month' => Carbon::parse($log->punch_time)->format('m'),
                             'year' => Carbon::parse($log->punch_time)->format('Y'),
@@ -171,6 +182,7 @@ class EmployeeAttendanceController extends Controller
                         ]);
                 }
 
+                AttendanceLog::where('id', $log->id)->update(['status' => 1]);
             }
 
 

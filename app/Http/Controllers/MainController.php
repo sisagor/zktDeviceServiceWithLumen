@@ -36,13 +36,13 @@ class MainController extends Controller
             }
 
             if ($device->type == self::EMPLOYEE){
-                (new TeacherAttendanceController($device->ip))->run();
+                (new EmployeeAttendanceController($device->ip))->run();
             }
 
 
         }
 
-        dd("Successfully Done");
+        return true;
     }
 
 
